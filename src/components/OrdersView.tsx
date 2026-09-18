@@ -275,21 +275,21 @@ export const OrdersView: React.FC = () => {
                   <div key={idx} className="flex justify-between items-start text-xs">
                     <div>
                       <span className="font-bold text-neutral-900 dark:text-neutral-100">
-                        {it.quantity}x {it.menuItem.name}
+                        {it.quantity}x {it.menuItem?.name || 'Flame Special'}
                       </span>
-                      {it.options.doneness && (
+                      {it.options?.doneness && (
                         <span className="text-[11px] text-neutral-400 block">
                           Doneness: {it.options.doneness}
                         </span>
                       )}
-                      {it.options.addOns && it.options.addOns.length > 0 && (
+                      {it.options?.addOns && it.options.addOns.length > 0 && (
                         <span className="text-[11px] text-neutral-400 block">
                           + {it.options.addOns.map(a => a.name).join(', ')}
                         </span>
                       )}
                     </div>
                     <span className="font-black text-neutral-900 dark:text-neutral-100">
-                      ${it.totalPrice.toFixed(2)}
+                      ${(it.totalPrice || 0).toFixed(2)}
                     </span>
                   </div>
                 ))}
@@ -373,7 +373,7 @@ export const OrdersView: React.FC = () => {
 
                 <div className="text-xs text-neutral-600 dark:text-neutral-300">
                   <p className="line-clamp-1 font-medium">
-                    {order.items.map(it => `${it.quantity}x ${it.menuItem.name}`).join(', ')}
+                    {(order.items || []).map(it => `${it.quantity}x ${it.menuItem?.name || 'Item'}`).join(', ')}
                   </p>
                 </div>
 

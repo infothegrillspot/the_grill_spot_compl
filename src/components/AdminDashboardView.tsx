@@ -53,13 +53,26 @@ export const AdminDashboardView: React.FC = () => {
     showToast,
     d1Status,
     refreshD1Status,
-    syncAllToD1
+    syncAllToD1,
+    refreshOrders
   } = useApp();
 
   const [activeAdminTab, setActiveAdminTab] = useState<'orders' | 'menu' | 'staff' | 'riders' | 'accounts' | 'database'>('orders');
   const [isSyncingD1, setIsSyncingD1] = useState(false);
+  const [isRefreshingOrders, setIsRefreshingOrders] = useState(false);
   const [d1Logs, setD1Logs] = useState<any[]>([]);
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
+
+  const handleManualRefreshOrders = async () => {
+    setIsRefreshingOrders(true);
+    try {
+      await refreshOrders();
+      await refreshD1Status();
+      showToast('Live customer orders refreshed from Cloudflare D1.');
+    } finally {
+      setTimeout(() => setIsRefreshingOrders(false), 500);
+    }
+  };
 
   const fetchD1Logs = async () => {
     setIsLoadingLogs(true);
@@ -275,24 +288,37 @@ export const AdminDashboardView: React.FC = () => {
           { id: 'staff', label: 'Staff Management', icon: Users, count: staffList.length },
           { id: 'riders', label: 'Delivery Riders', icon: Bike, count: ridersList.length },
           { id: 'accounts', label: 'Registered Accounts', icon: ShieldAlert, count: allUsersList.length },
-          { id: 'database', label: 'Cloudflare D1 SQL', icon: Database, count: d1Status.totalRecords || 0 }
+          { id: 'database', label: 'Cloudflare D1 SQL', icon: Database, count: d1Status?.totalRecords || 0 }
         ].map(tab => {
           const Icon = tab.icon;
           const isActive = activeAdminTab === tab.id;
           return (
             <button
               key={tab.id}
-              onClick={() => setActiveAdminTab(tab.id as any)}
+              onClick={() => {
+                setActiveAdminTab(tab.id as any);
+                if (tab.id === 'orders') refreshOrders();
+              }}
               className={`px-4 py-2.5 rounded-2xl text-xs font-black transition-all cursor-pointer flex items-center gap-2 shrink-0 ${
                 isActive
                   ? 'bg-orange-600 text-white shadow-md shadow-orange-600/30 ring-2 ring-orange-500'
-                  : 'bg-white dark:bg-neutral-900 text-neutral-600 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-800 hover:border-orange-500/50'
+                  : 'bg-white dark:bg-neutral-900 text-neutral-600 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-800 hover:border-orange-500/50 hover:text-neutral-900 dark:hover:text-white'
               }`}
             >
+              {tab.id === 'orders' && (
+                <span className="relative flex h-2 w-2 mr-0.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+              )}
               <Icon className="w-4 h-4" />
               <span>{tab.label}</span>
-              <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-bold ${
-                isActive ? 'bg-black/30 text-white' : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-500'
+              <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                isActive
+                  ? 'bg-black/30 text-white'
+                  : tab.id === 'orders' && tab.count > 0
+                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
+                  : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-500'
               }`}>
                 {tab.count}
               </span>
@@ -304,40 +330,65 @@ export const AdminDashboardView: React.FC = () => {
       {/* TAB 1: ORDERS MANAGEMENT */}
       {activeAdminTab === 'orders' && (
         <div className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-neutral-900 p-4 rounded-3xl border border-neutral-200 dark:border-neutral-800 shadow-xs">
             <div>
-              <h2 className="text-lg font-black text-neutral-900 dark:text-neutral-100">
-                Customer Orders
-              </h2>
-              <p className="text-xs text-neutral-500 dark:text-neutral-400">
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-black text-neutral-900 dark:text-neutral-100">
+                  Customer Orders
+                </h2>
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  Live D1 Dispatch
+                </span>
+              </div>
+              <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
                 Change order status live, assign couriers, and manage customer deliveries
               </p>
             </div>
 
-            {/* Filter pills */}
-            <div className="flex items-center gap-1.5 text-xs font-bold">
-              {(['all', 'active', 'delivered', 'cancelled'] as const).map(f => (
-                <button
-                  key={f}
-                  onClick={() => setOrderFilter(f)}
-                  className={`px-3 py-1.5 rounded-xl capitalize cursor-pointer transition-colors ${
-                    orderFilter === f
-                      ? 'bg-orange-600 text-white'
-                      : 'bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 text-neutral-600 dark:text-neutral-300'
-                  }`}
-                >
-                  {f}
-                </button>
-              ))}
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={handleManualRefreshOrders}
+                disabled={isRefreshingOrders}
+                className="px-3 py-1.5 rounded-xl bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-200 text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+                title="Sync live orders from Cloudflare D1"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isRefreshingOrders ? 'animate-spin text-orange-500' : ''}`} />
+                <span>{isRefreshingOrders ? 'Syncing...' : 'Refresh Orders'}</span>
+              </button>
+
+              {/* Filter pills */}
+              <div className="flex items-center gap-1 text-xs font-bold bg-neutral-100 dark:bg-neutral-800/60 p-1 rounded-xl">
+                {(['all', 'active', 'delivered', 'cancelled'] as const).map(f => (
+                  <button
+                    key={f}
+                    onClick={() => setOrderFilter(f)}
+                    className={`px-3 py-1 rounded-lg capitalize cursor-pointer transition-colors ${
+                      orderFilter === f
+                        ? 'bg-orange-600 text-white shadow-xs'
+                        : 'text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white'
+                    }`}
+                  >
+                    {f}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
           {filteredOrders.length === 0 ? (
-            <div className="p-8 text-center bg-white dark:bg-neutral-900 rounded-3xl border border-neutral-200 dark:border-neutral-800 space-y-2">
-              <Package className="w-8 h-8 text-neutral-400 mx-auto" />
+            <div className="p-8 text-center bg-white dark:bg-neutral-900 rounded-3xl border border-neutral-200 dark:border-neutral-800 space-y-3">
+              <Package className="w-10 h-10 text-neutral-400 mx-auto" />
               <p className="text-sm font-bold text-neutral-700 dark:text-neutral-300">
                 No orders match this filter
               </p>
+              <button
+                onClick={handleManualRefreshOrders}
+                className="px-4 py-2 rounded-xl bg-orange-600 hover:bg-orange-500 text-white text-xs font-black inline-flex items-center gap-1.5 cursor-pointer transition-colors shadow-sm shadow-orange-600/20"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Refresh from Cloudflare D1</span>
+              </button>
             </div>
           ) : (
             <div className="space-y-3">
@@ -349,10 +400,10 @@ export const AdminDashboardView: React.FC = () => {
                   <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-100 dark:border-neutral-800 pb-3">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-black text-orange-600 dark:text-orange-400">
-                        {order.orderNumber}
+                        {order.orderNumber || order.id}
                       </span>
                       <span className="text-xs text-neutral-400">
-                        • {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        • {order.createdAt ? new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now'}
                       </span>
                     </div>
 
@@ -370,7 +421,7 @@ export const AdminDashboardView: React.FC = () => {
                           ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
                           : 'bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300'
                       }`}>
-                        {order.status.replace('_', ' ')}
+                        {(order.status || 'confirmed').replace('_', ' ')}
                       </span>
                     </div>
                   </div>
@@ -378,21 +429,21 @@ export const AdminDashboardView: React.FC = () => {
                   {/* Customer & Address Details */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-neutral-600 dark:text-neutral-300">
                     <div>
-                      <p><strong className="text-neutral-900 dark:text-neutral-100">Customer:</strong> {order.customerName || 'Customer'} ({order.customerPhone})</p>
-                      <p><strong className="text-neutral-900 dark:text-neutral-100">Address:</strong> {order.deliveryAddress}</p>
+                      <p><strong className="text-neutral-900 dark:text-neutral-100">Customer:</strong> {order.customerName || 'Customer'} ({order.customerPhone || 'N/A'})</p>
+                      <p><strong className="text-neutral-900 dark:text-neutral-100">Address:</strong> {order.deliveryAddress || 'Pickup at Restaurant'}</p>
                     </div>
                     <div>
-                      <p><strong className="text-neutral-900 dark:text-neutral-100">Type:</strong> {order.orderType.toUpperCase()} • <strong className="text-neutral-900 dark:text-neutral-100">Payment:</strong> {order.paymentMethod}</p>
-                      <p><strong className="text-neutral-900 dark:text-neutral-100">Total:</strong> ${order.total.toFixed(2)}</p>
+                      <p><strong className="text-neutral-900 dark:text-neutral-100">Type:</strong> {(order.orderType || 'delivery').toUpperCase()} • <strong className="text-neutral-900 dark:text-neutral-100">Payment:</strong> {order.paymentMethod || 'Cash on Delivery'}</p>
+                      <p><strong className="text-neutral-900 dark:text-neutral-100">Total:</strong> ${(order.total || 0).toFixed(2)}</p>
                     </div>
                   </div>
 
                   {/* Ordered Items preview */}
                   <div className="bg-neutral-50 dark:bg-neutral-800/50 p-3 rounded-2xl text-xs space-y-1">
-                    {order.items.map((it, idx) => (
+                    {(order.items || []).map((it, idx) => (
                       <div key={idx} className="flex justify-between">
-                        <span>{it.quantity}x {it.menuItem.name} {it.options?.doneness ? `(${it.options.doneness})` : ''}</span>
-                        <span className="font-bold">${it.totalPrice.toFixed(2)}</span>
+                        <span>{it.quantity}x {it.menuItem?.name || 'Flame Special'} {it.options?.doneness ? `(${it.options.doneness})` : ''}</span>
+                        <span className="font-bold">${(it.totalPrice || 0).toFixed(2)}</span>
                       </div>
                     ))}
                   </div>
@@ -888,20 +939,23 @@ export const AdminDashboardView: React.FC = () => {
                     parsedDetails = log.details;
                   }
 
-                  const getActionBadgeColor = (action: string) => {
-                    if (action.includes('order')) return 'bg-orange-100 text-orange-800 dark:bg-orange-950/60 dark:text-orange-300';
-                    if (action.includes('login') || action.includes('register')) return 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300';
-                    if (action.includes('menu')) return 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300';
-                    if (action.includes('staff') || action.includes('rider')) return 'bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300';
+                  const actionName = String(log.action || log.event_type || 'activity');
+
+                  const getActionBadgeColor = (action?: string) => {
+                    const act = String(action || '').toLowerCase();
+                    if (act.includes('order')) return 'bg-orange-100 text-orange-800 dark:bg-orange-950/60 dark:text-orange-300';
+                    if (act.includes('login') || act.includes('register') || act.includes('auth') || act.includes('user')) return 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300';
+                    if (act.includes('menu')) return 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300';
+                    if (act.includes('staff') || act.includes('rider')) return 'bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300';
                     return 'bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300';
                   };
 
                   return (
-                    <div key={log.id} className="p-3.5 sm:p-4 text-xs hover:bg-neutral-50 dark:hover:bg-neutral-800/40 transition-colors">
+                    <div key={log.id || ('log-' + Math.random())} className="p-3.5 sm:p-4 text-xs hover:bg-neutral-50 dark:hover:bg-neutral-800/40 transition-colors">
                       <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
                         <div className="flex items-center gap-2">
-                          <span className={`px-2 py-0.5 rounded-md font-mono text-[10px] font-bold uppercase tracking-wide ${getActionBadgeColor(log.action)}`}>
-                            {log.action.replace(/_/g, ' ')}
+                          <span className={`px-2 py-0.5 rounded-md font-mono text-[10px] font-bold uppercase tracking-wide ${getActionBadgeColor(actionName)}`}>
+                            {actionName.replace(/_/g, ' ')}
                           </span>
                           <span className="font-semibold text-neutral-800 dark:text-neutral-200">
                             {log.actor_name || log.actor_email || 'System'}

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import {
   ThemeMode,
   TabType,
@@ -29,11 +29,14 @@ import {
   getDocs,
   onSnapshot,
   updateDoc,
-  deleteDoc
+  deleteDoc,
+  query,
+  where
 } from 'firebase/firestore';
 import {
   d1SyncUser,
   d1SaveOrder,
+  d1GetOrders,
   d1UpdateOrderStatus,
   d1SaveMenuItem,
   d1DeleteMenuItem,
@@ -116,6 +119,7 @@ interface AppContextType {
   d1Status: D1StatusResponse | null;
   refreshD1Status: () => Promise<void>;
   syncAllToD1: () => Promise<{ success: boolean; message?: string }>;
+  refreshOrders: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -185,8 +189,53 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [ridersList, setRidersList] = useState<RiderMember[]>(DEFAULT_RIDERS);
   const [allUsersList, setAllUsersList] = useState<User[]>([]);
 
-  // Orders state
-  const [orders, setOrders] = useState<Order[]>([]);
+  // Orders state - initialized from localStorage for zero data loss
+  const [orders, setOrders] = useState<Order[]>(() => {
+    try {
+      const saved = localStorage.getItem('grill_spot_orders');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return [];
+  });
+
+  // Dedicated Live Orders Synchronization function
+  const refreshOrders = useCallback(async () => {
+    try {
+      const d1Orders = await d1GetOrders(isAdmin ? undefined : (user?.email || undefined));
+      if (d1Orders && d1Orders.length > 0) {
+        setOrders(prev => {
+          const map = new Map<string, Order>();
+          // Existing orders first
+          prev.forEach(o => map.set(o.id, o));
+          // Merge D1 orders (D1 status updates take priority)
+          d1Orders.forEach(o => {
+            const existing = map.get(o.id);
+            map.set(o.id, { ...existing, ...o });
+          });
+          const merged = Array.from(map.values());
+          merged.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+          try {
+            localStorage.setItem('grill_spot_orders', JSON.stringify(merged));
+          } catch {}
+          return merged;
+        });
+      }
+    } catch (e) {
+      console.warn('Live orders synchronization notice:', e);
+    }
+  }, [isAdmin, user?.email]);
+
+  // Periodic Live Orders Sync (every 6 seconds for live dispatch updates)
+  useEffect(() => {
+    refreshOrders();
+    const interval = setInterval(() => {
+      refreshOrders();
+    }, 6000);
+    return () => clearInterval(interval);
+  }, [refreshOrders]);
 
   // Cloudflare D1 SQL State
   const [d1Status, setD1Status] = useState<D1StatusResponse | null>(null);
@@ -318,37 +367,46 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, []);
 
-  // Listen to Orders in Firestore (filtered by user or all if admin)
+  // Listen to Orders in Firestore (safely merged into live orders state)
   useEffect(() => {
-    if (!user) {
-      setOrders([]);
-      return;
-    }
+    if (!user) return;
 
     try {
       const ordersCol = collection(db, 'orders');
+      const orderQuery = isAdmin ? ordersCol : query(ordersCol, where('userId', '==', user.id));
+
       const unsubscribe = onSnapshot(
-        ordersCol,
+        orderQuery,
         snapshot => {
-          const list: Order[] = [];
-          snapshot.forEach(docSnap => {
-            const data = docSnap.data() as Order;
-            // Admin sees all orders; customer only sees their own orders
-            if (isAdmin || data.userId === user.id) {
+          if (!snapshot.empty) {
+            const list: Order[] = [];
+            snapshot.forEach(docSnap => {
+              const data = docSnap.data() as Order;
               list.push({ ...data, id: docSnap.id });
-            }
-          });
-          // Sort orders by createdAt descending
-          list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-          setOrders(list);
+            });
+            setOrders(prev => {
+              const map = new Map<string, Order>();
+              prev.forEach(o => map.set(o.id, o));
+              list.forEach(o => {
+                const existing = map.get(o.id);
+                map.set(o.id, { ...existing, ...o });
+              });
+              const merged = Array.from(map.values());
+              merged.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+              try {
+                localStorage.setItem('grill_spot_orders', JSON.stringify(merged));
+              } catch {}
+              return merged;
+            });
+          }
         },
         error => {
-          handleFirestoreError(error, OperationType.LIST, 'orders');
+          console.warn('Firestore orders sync notice (using Cloudflare D1 for live orders):', error?.message);
         }
       );
       return () => unsubscribe();
-    } catch {
-      // Fallback handled
+    } catch (e) {
+      console.warn('Firestore orders listener error:', e);
     }
   }, [user?.id, isAdmin]);
 
@@ -606,18 +664,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const addToCart = (item: MenuItem, options: CartItemOption = {}, qty = 1) => {
+    const safeOptions = options || {};
     let itemBasePrice = item.price;
-    if (options.addOns && options.addOns.length > 0) {
-      const addOnsTotal = options.addOns.reduce((sum, addOn) => sum + addOn.price, 0);
+    if (safeOptions.addOns && safeOptions.addOns.length > 0) {
+      const addOnsTotal = safeOptions.addOns.reduce((sum, addOn) => sum + addOn.price, 0);
       itemBasePrice += addOnsTotal;
     }
     const unitPrice = itemBasePrice;
 
-    const optionKey = `${item.id}-${options.doneness || ''}-${options.spiceLevel || ''}-${(options.addOns || []).map(a => a.name).sort().join(',')}-${options.specialInstructions || ''}`;
+    const optionKey = `${item.id}-${safeOptions.doneness || ''}-${safeOptions.spiceLevel || ''}-${(safeOptions.addOns || []).map(a => a.name).sort().join(',')}-${safeOptions.specialInstructions || ''}`;
 
     setCart(prevCart => {
       const existingIdx = prevCart.findIndex(ci => {
-        const ciKey = `${ci.menuItem.id}-${ci.options.doneness || ''}-${ci.options.spiceLevel || ''}-${(ci.options.addOns || []).map(a => a.name).sort().join(',')}-${ci.options.specialInstructions || ''}`;
+        const ciOptions = ci.options || {};
+        const ciKey = `${ci.menuItem.id}-${ciOptions.doneness || ''}-${ciOptions.spiceLevel || ''}-${(ciOptions.addOns || []).map(a => a.name).sort().join(',')}-${ciOptions.specialInstructions || ''}`;
         return ciKey === optionKey;
       });
 
@@ -635,7 +695,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           id: 'ci-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
           menuItem: item,
           quantity: qty,
-          options,
+          options: safeOptions,
           totalPrice: Number((qty * unitPrice).toFixed(2))
         };
         return [...prevCart, newItem];
@@ -779,8 +839,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const reorder = (pastOrder: Order) => {
-    pastOrder.items.forEach(item => {
-      addToCart(item.menuItem, item.options, item.quantity);
+    (pastOrder.items || []).forEach(item => {
+      addToCart(item.menuItem, item.options || {}, item.quantity);
     });
     setActiveTab('cart');
     showToast('Added items from past order into your cart!');
@@ -804,31 +864,56 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     riderName?: string,
     riderPhone?: string
   ) => {
-    try {
-      const updates: any = {
-        status: newStatus,
-        estimatedDeliveryTime:
-          newStatus === 'delivered'
-            ? 'Delivered'
-            : newStatus === 'out_for_delivery'
-            ? '5-10 mins'
-            : newStatus === 'quality_check'
-            ? '15-20 mins'
-            : '25-35 mins'
-      };
-      if (riderName) updates.riderName = riderName;
-      if (riderPhone) updates.riderPhone = riderPhone;
+    const estTime =
+      newStatus === 'delivered'
+        ? 'Delivered'
+        : newStatus === 'out_for_delivery'
+        ? '5-10 mins'
+        : newStatus === 'quality_check'
+        ? '15-20 mins'
+        : '25-35 mins';
 
-      await updateDoc(doc(db, 'orders', orderId), updates);
-      // Save status update to Cloudflare D1 SQL
+    // 1. Immediately update UI state
+    setOrders(prev =>
+      prev.map(o => {
+        if (o.id === orderId) {
+          return {
+            ...o,
+            status: newStatus,
+            estimatedDeliveryTime: estTime,
+            ...(riderName ? { riderName } : {}),
+            ...(riderPhone ? { riderPhone } : {})
+          };
+        }
+        return o;
+      })
+    );
+
+    const updates: any = {
+      status: newStatus,
+      estimatedDeliveryTime: estTime
+    };
+    if (riderName) updates.riderName = riderName;
+    if (riderPhone) updates.riderPhone = riderPhone;
+
+    // 2. Persist to Cloudflare D1 SQL
+    try {
       await d1UpdateOrderStatus(orderId, newStatus, riderName, user?.email, user?.name);
       await refreshD1Status();
-
-      showToast(`Order status updated to: ${newStatus.replace('_', ' ').toUpperCase()} (Cloudflare D1 SQL)`);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `orders/${orderId}`);
-      await d1UpdateOrderStatus(orderId, newStatus, riderName, user?.email, user?.name);
+    } catch (d1Err) {
+      console.warn('D1 update status warning:', d1Err);
     }
+
+    // 3. Persist to Firestore if available
+    if (auth.currentUser) {
+      try {
+        await updateDoc(doc(db, 'orders', orderId), updates);
+      } catch (fsErr) {
+        console.warn('Firestore updateDoc notice:', fsErr);
+      }
+    }
+
+    showToast(`Order status updated to: ${newStatus.replace('_', ' ').toUpperCase()}`);
   };
 
   // Menu Management
@@ -1005,7 +1090,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         allUsersList,
         d1Status,
         refreshD1Status,
-        syncAllToD1
+        syncAllToD1,
+        refreshOrders
       }}
     >
       {children}

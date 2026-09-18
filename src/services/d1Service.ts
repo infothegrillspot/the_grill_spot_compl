@@ -48,6 +48,8 @@ export async function d1SaveOrder(order: Order) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         id: order.id,
+        orderNumber: order.orderNumber,
+        userId: order.userId,
         customerName: order.customerName,
         customerEmail: (order as any).customerEmail || (order as any).email || null,
         customerPhone: order.customerPhone,
@@ -55,20 +57,40 @@ export async function d1SaveOrder(order: Order) {
         items: order.items,
         subtotal: order.subtotal,
         deliveryFee: order.deliveryFee,
+        tax: order.tax,
         discount: order.discount,
+        tip: order.tip,
         total: order.total,
         status: order.status,
+        orderType: order.orderType || 'delivery',
         paymentMethod: order.paymentMethod,
         notes: order.specialInstructions || null,
         estimatedTime: order.estimatedDeliveryTime || null,
         promoCode: (order as any).promoCode || null,
-        riderName: order.riderName || null
+        riderName: order.riderName || null,
+        riderPhone: order.riderPhone || null
       })
     });
     return await res.json();
   } catch (err) {
     console.error('Error saving order to Cloudflare D1:', err);
     return { success: false, error: String(err) };
+  }
+}
+
+// 2b. Fetch Live Orders from Cloudflare D1
+export async function d1GetOrders(email?: string): Promise<Order[]> {
+  try {
+    const url = email ? `/api/d1/orders?email=${encodeURIComponent(email)}` : '/api/d1/orders';
+    const res = await fetch(url);
+    const data = await res.json();
+    if (data.success && Array.isArray(data.orders)) {
+      return data.orders as Order[];
+    }
+    return [];
+  } catch (err) {
+    console.warn('Failed to fetch orders from Cloudflare D1:', err);
+    return [];
   }
 }
 

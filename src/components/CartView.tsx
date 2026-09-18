@@ -181,23 +181,23 @@ export const CartView: React.FC = () => {
 
                   {/* Customization labels */}
                   <div className="text-[11px] text-neutral-500 dark:text-neutral-400 space-y-0.5 mt-1">
-                    {item.options.doneness && (
+                    {item.options?.doneness && (
                       <p>
                         <span className="font-semibold text-neutral-700 dark:text-neutral-300">Doneness:</span> {item.options.doneness}
                       </p>
                     )}
-                    {item.options.spiceLevel && (
+                    {item.options?.spiceLevel && (
                       <p>
                         <span className="font-semibold text-neutral-700 dark:text-neutral-300">Spice:</span> {item.options.spiceLevel}
                       </p>
                     )}
-                    {item.options.addOns && item.options.addOns.length > 0 && (
+                    {item.options?.addOns && item.options.addOns.length > 0 && (
                       <p>
                         <span className="font-semibold text-neutral-700 dark:text-neutral-300">Add-ons:</span>{' '}
                         {item.options.addOns.map(a => `${a.name} (+$${a.price.toFixed(2)})`).join(', ')}
                       </p>
                     )}
-                    {item.options.specialInstructions && (
+                    {item.options?.specialInstructions && (
                       <p className="italic text-amber-600 dark:text-amber-400">
                         &quot;{item.options.specialInstructions}&quot;
                       </p>

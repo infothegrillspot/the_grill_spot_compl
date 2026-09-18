@@ -28,9 +28,9 @@ export const MenuSearchView: React.FC = () => {
       // Text query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
-        const matchName = item.name.toLowerCase().includes(q);
-        const matchDesc = item.description.toLowerCase().includes(q);
-        const matchCat = item.category.toLowerCase().includes(q);
+        const matchName = (item.name || '').toLowerCase().includes(q);
+        const matchDesc = (item.description || '').toLowerCase().includes(q);
+        const matchCat = (item.category || '').toLowerCase().includes(q);
         if (!matchName && !matchDesc && !matchCat) return false;
       }
       // Spicy filter

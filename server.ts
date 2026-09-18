@@ -98,6 +98,7 @@ export async function recordD1Activity(
   const logEntry = {
     id,
     event_type: eventType,
+    action: eventType,
     actor_email: actorEmail,
     actor_name: actorName,
     details: parsedDetails,
@@ -236,6 +237,212 @@ function safeParseJson(str: string) {
   }
 }
 
+// Helper to normalize orders for frontend Order interface
+function formatOrderResponse(o: any) {
+  const items = typeof o.items === 'string' ? safeParseJson(o.items) : (o.items || []);
+  const safeItems = Array.isArray(items)
+    ? items.map((it: any) => ({
+        ...it,
+        options: it?.options || {}
+      }))
+    : [];
+  const idStr = String(o.id || '');
+  const orderNum = o.orderNumber || o.order_number || (idStr.startsWith('#GS-') ? idStr : ('#GS-' + (idStr.includes('-') ? idStr.split('-').pop() : (idStr.length > 4 ? idStr.slice(-4) : '4821'))));
+  const subtotal = Number(o.subtotal) || 0;
+  const deliveryFee = Number(o.deliveryFee !== undefined ? o.deliveryFee : (o.delivery_fee !== undefined ? o.delivery_fee : 2.99));
+  const tax = Number(o.tax !== undefined ? o.tax : Number((subtotal * 0.0825).toFixed(2)));
+  const discount = Number(o.discount) || 0;
+  const tip = Number(o.tip) || 0;
+  const total = Number(o.total) || Number((subtotal + deliveryFee + tax + tip - discount).toFixed(2));
+
+  return {
+    id: o.id,
+    orderNumber: orderNum,
+    userId: o.userId || o.user_id || o.customerEmail || o.customer_email || 'cust_guest',
+    customerName: o.customerName || o.customer_name || 'Grill Customer',
+    customerEmail: o.customerEmail || o.customer_email || 'customer@thegrillspot.local',
+    customerPhone: o.customerPhone || o.customer_phone || '+1 (555) 438-9201',
+    deliveryAddress: o.deliveryAddress || o.delivery_address || '742 Evergreen Terrace, Apt 12',
+    items: safeItems,
+    subtotal,
+    deliveryFee,
+    tax,
+    discount,
+    tip,
+    total,
+    status: o.status || 'confirmed',
+    orderType: o.orderType || o.order_type || 'delivery',
+    paymentMethod: o.paymentMethod || o.payment_method || 'Cash on Delivery',
+    specialInstructions: o.notes || o.specialInstructions || o.special_instructions || '',
+    estimatedDeliveryTime: o.estimatedTime || o.estimatedDeliveryTime || o.estimated_time || '20-25 mins',
+    riderName: o.riderName || o.rider_name || 'Marcus "Speedy" Vance',
+    riderPhone: o.riderPhone || o.rider_phone || '+1 (555) 902-8812',
+    createdAt: o.createdAt || o.created_at || new Date().toISOString()
+  };
+}
+
+// Initial demonstration orders for live dispatching
+const DEMO_LIVE_ORDERS = [
+  {
+    id: 'ord-live-101',
+    orderNumber: '#GS-4821',
+    userId: 'cust-101',
+    customerName: 'David Miller',
+    customerEmail: 'david.m@example.com',
+    customerPhone: '+1 (555) 782-9014',
+    deliveryAddress: '842 Highland Ave, Apt 4B',
+    items: [
+      {
+        menuItem: {
+          id: 'g1',
+          name: 'The Boss Flame Burger',
+          price: 13.99,
+          category: 'burgers',
+          image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=800&q=80',
+          prepTime: '15-20 min',
+          isBestseller: true
+        },
+        options: { doneness: 'Medium Well' },
+        quantity: 2,
+        totalPrice: 27.98
+      },
+      {
+        menuItem: {
+          id: 'g12',
+          name: 'Fresh Mint Flame Lemonade',
+          price: 4.99,
+          category: 'drinks',
+          image: 'https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=800&q=80',
+          prepTime: '5 min'
+        },
+        quantity: 2,
+        totalPrice: 9.98
+      }
+    ],
+    subtotal: 37.96,
+    deliveryFee: 2.99,
+    tax: 3.13,
+    discount: 0,
+    tip: 5.00,
+    total: 49.08,
+    status: 'grilling',
+    orderType: 'delivery',
+    paymentMethod: 'Credit / Debit Card',
+    specialInstructions: 'Extra napkins and smoky BBQ sauce on the side please!',
+    estimatedDeliveryTime: '15-20 mins',
+    riderName: 'Marcus "Speedy" Vance',
+    riderPhone: '+1 (555) 902-8812',
+    createdAt: new Date(Date.now() - 12 * 60 * 1000).toISOString()
+  },
+  {
+    id: 'ord-live-102',
+    orderNumber: '#GS-5104',
+    userId: 'cust-102',
+    customerName: 'Jessica Taylor',
+    customerEmail: 'jessica.t@example.com',
+    customerPhone: '+1 (555) 234-8891',
+    deliveryAddress: '1204 Pine Ridge Rd, Fl 2',
+    items: [
+      {
+        menuItem: {
+          id: 'g3',
+          name: 'Prime Tomahawk Ribeye Steak (16 oz)',
+          price: 34.99,
+          category: 'steaks',
+          image: 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=800&q=80',
+          prepTime: '25-30 min',
+          isChefSpecial: true
+        },
+        options: { doneness: 'Medium Rare (Chef Pick)' },
+        quantity: 1,
+        totalPrice: 34.99
+      },
+      {
+        menuItem: {
+          id: 'g11',
+          name: 'Smoked Vanilla Salted Caramel Milkshake',
+          price: 6.99,
+          category: 'drinks',
+          image: 'https://images.unsplash.com/photo-1572490122747-3968b75cc699?auto=format&fit=crop&w=800&q=80',
+          prepTime: '5 min'
+        },
+        quantity: 1,
+        totalPrice: 6.99
+      }
+    ],
+    subtotal: 41.98,
+    deliveryFee: 2.99,
+    tax: 3.46,
+    discount: 5.00,
+    tip: 6.00,
+    total: 49.43,
+    status: 'confirmed',
+    orderType: 'delivery',
+    paymentMethod: 'Digital Wallet',
+    specialInstructions: 'Ring doorbell twice upon arrival.',
+    estimatedDeliveryTime: '25-30 mins',
+    riderName: 'Elena Rostova',
+    riderPhone: '+1 (555) 903-4421',
+    createdAt: new Date(Date.now() - 4 * 60 * 1000).toISOString()
+  },
+  {
+    id: 'ord-live-103',
+    orderNumber: '#GS-3982',
+    userId: 'cust-103',
+    customerName: 'Robert Chen',
+    customerEmail: 'robert.c@example.com',
+    customerPhone: '+1 (555) 671-3490',
+    deliveryAddress: '305 Downtown Metro Plaza, Suite 900',
+    items: [
+      {
+        menuItem: {
+          id: 'g2',
+          name: 'Smoked Texas Brisket Burger',
+          price: 15.49,
+          category: 'burgers',
+          image: 'https://images.unsplash.com/photo-1586190848861-99aa4a171e90?auto=format&fit=crop&w=800&q=80',
+          prepTime: '15-20 min',
+          isChefSpecial: true
+        },
+        quantity: 2,
+        totalPrice: 30.98
+      },
+      {
+        menuItem: {
+          id: 'g9',
+          name: 'Truffle & Herb Smoked Fries',
+          price: 7.99,
+          category: 'sides',
+          image: 'https://images.unsplash.com/photo-1573080496219-bb080dd4f877?auto=format&fit=crop&w=800&q=80',
+          prepTime: '10 min',
+          isBestseller: true
+        },
+        quantity: 1,
+        totalPrice: 7.99
+      }
+    ],
+    subtotal: 38.97,
+    deliveryFee: 2.99,
+    tax: 3.22,
+    discount: 0,
+    tip: 4.50,
+    total: 49.68,
+    status: 'out_for_delivery',
+    orderType: 'delivery',
+    paymentMethod: 'Cash on Delivery',
+    specialInstructions: 'Leave with front desk security if needed.',
+    estimatedDeliveryTime: '5-10 mins',
+    riderName: 'Jamal Washington',
+    riderPhone: '+1 (555) 904-7733',
+    createdAt: new Date(Date.now() - 25 * 60 * 1000).toISOString()
+  }
+];
+
+// Initialize in-memory fallback store with demo live orders
+DEMO_LIVE_ORDERS.forEach(order => {
+  d1FallbackStore.orders.set(order.id, order);
+});
+
 // 1. Health & Database Status
 app.get('/api/d1/status', async (_req: Request, res: Response) => {
   const startTime = Date.now();
@@ -273,6 +480,7 @@ app.get('/api/d1/status', async (_req: Request, res: Response) => {
       },
       recentLogs: recentLogs.map((log: any) => ({
         ...log,
+        action: log.event_type || log.action || 'system_event',
         details: typeof log.details === 'string' ? safeParseJson(log.details) : log.details
       }))
     });
@@ -387,21 +595,27 @@ app.post('/api/d1/orders', async (req: Request, res: Response) => {
 
   const orderRecord = {
     id,
-    customer_name: customerName || 'Customer',
-    customer_email: effectiveEmail,
-    customer_phone: customerPhone || '',
-    delivery_address: deliveryAddress || '',
-    items: itemsJson,
+    orderNumber: req.body.orderNumber || ('#GS-' + String(id).slice(-4)),
+    userId: req.body.userId || effectiveEmail,
+    customerName: customerName || 'Customer',
+    customerEmail: effectiveEmail,
+    customerPhone: customerPhone || '',
+    deliveryAddress: deliveryAddress || '',
+    items: typeof items === 'string' ? safeParseJson(items) : (items || []),
     subtotal: Number(subtotal) || 0,
-    delivery_fee: Number(deliveryFee) || 0,
+    deliveryFee: Number(deliveryFee) || 0,
+    tax: Number(req.body.tax) || Number(((Number(subtotal) || 0) * 0.0825).toFixed(2)),
     discount: Number(discount) || 0,
+    tip: Number(req.body.tip) || 0,
     total: Number(total) || 0,
     status: status || 'confirmed',
-    payment_method: paymentMethod || 'Cash on Delivery',
+    orderType: req.body.orderType || 'delivery',
+    paymentMethod: paymentMethod || 'Cash on Delivery',
     notes: notes || '',
-    estimated_time: estimatedTime || '25-35 min',
-    promo_code: promoCode || '',
-    rider_name: riderName || '',
+    estimatedTime: estimatedTime || '25-35 min',
+    promoCode: promoCode || '',
+    riderName: riderName || '',
+    riderPhone: req.body.riderPhone || '',
     created_at: now,
     updated_at: now
   };
@@ -501,19 +715,21 @@ app.get('/api/d1/orders', async (req: Request, res: Response) => {
       orders = await queryD1('SELECT * FROM orders ORDER BY created_at DESC');
     }
 
-    const parsed = orders.map((o: any) => ({
-      ...o,
-      items: typeof o.items === 'string' ? safeParseJson(o.items) : o.items
-    }));
+    if (Array.isArray(orders) && orders.length > 0) {
+      const parsed = orders.map(formatOrderResponse);
+      return res.json({ success: true, orders: parsed });
+    }
 
-    res.json({ success: true, orders: parsed });
+    // If D1 table has no records yet, use the in-memory fallback store
+    const list = Array.from(d1FallbackStore.orders.values())
+      .filter(o => !email || (o.customerEmail || o.customer_email) === email)
+      .map(formatOrderResponse);
+
+    res.json({ success: true, orders: list });
   } catch {
     const list = Array.from(d1FallbackStore.orders.values())
-      .filter(o => !email || o.customer_email === email)
-      .map(o => ({
-        ...o,
-        items: typeof o.items === 'string' ? safeParseJson(o.items) : o.items
-      }));
+      .filter(o => !email || (o.customerEmail || o.customer_email) === email)
+      .map(formatOrderResponse);
     res.json({ success: true, orders: list });
   }
 });
@@ -766,6 +982,7 @@ app.get('/api/d1/activity', async (req: Request, res: Response) => {
       success: true,
       logs: logs.map((l: any) => ({
         ...l,
+        action: l.event_type || l.action || 'system_event',
         details: typeof l.details === 'string' ? safeParseJson(l.details) : l.details
       }))
     });

@@ -134,7 +134,7 @@ export const ItemDetailModal: React.FC<{ item: MenuItem; onClose: () => void }> 
           </div>
 
           {/* Doneness Options (if applicable) */}
-          {item.customizationOptions?.doneness && (
+          {item.customizationOptions?.doneness && item.customizationOptions.doneness.length > 0 && (
             <div className="pt-4 space-y-2">
               <div className="flex items-center justify-between">
                 <label className="text-sm font-bold text-neutral-900 dark:text-neutral-100">
