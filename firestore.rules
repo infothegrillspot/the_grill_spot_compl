@@ -1,0 +1,70 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'info.thegrillspot@gmail.com'
+      );
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Users collection
+    match /users/{userId} {
+      // Users can read and write their own document; Admins can read/write all accounts
+      allow read: if isOwner(userId) || isAdmin();
+      allow create, update: if isOwner(userId) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Orders collection
+    match /orders/{orderId} {
+      // Admin can read and write all orders
+      // Customer can read their own orders and create orders
+      allow read: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow delete: if isAdmin();
+    }
+
+    // Menu collection
+    match /menu/{itemId} {
+      // Public read so guests & mobile customers can browse the menu
+      allow read: if true;
+      // Only Admin can add, update (price, stock), or delete items
+      allow write: if isAdmin();
+    }
+
+    // Staff collection
+    match /staff/{staffId} {
+      // Only Admin can view and manage staff
+      allow read, write: if isAdmin();
+    }
+
+    // Riders collection
+    match /riders/{riderId} {
+      // Public read for assigned rider status or admin management
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // Store config
+    match /config/{configId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+  }
+}

@@ -1,0 +1,143 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Customer and Staff profiles for The Grill Spot",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "maxLength": 100 },
+        "email": { "type": "string", "maxLength": 150 },
+        "phone": { "type": "string", "maxLength": 30 },
+        "address": { "type": "string", "maxLength": 300 },
+        "secondaryAddress": { "type": "string", "maxLength": 300 },
+        "role": { "type": "string", "enum": ["admin", "staff", "rider", "customer"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "name", "email"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Customer food order with tracking and delivery details",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "orderNumber": { "type": "string", "maxLength": 30 },
+        "userId": { "type": "string" },
+        "items": { "type": "array" },
+        "subtotal": { "type": "number" },
+        "deliveryFee": { "type": "number" },
+        "tax": { "type": "number" },
+        "discount": { "type": "number" },
+        "tip": { "type": "number" },
+        "total": { "type": "number" },
+        "status": {
+          "type": "string",
+          "enum": ["confirmed", "grilling", "quality_check", "out_for_delivery", "delivered", "cancelled"]
+        },
+        "orderType": { "type": "string", "enum": ["delivery", "pickup"] },
+        "deliveryAddress": { "type": "string", "maxLength": 300 },
+        "customerPhone": { "type": "string", "maxLength": 30 },
+        "customerName": { "type": "string", "maxLength": 100 },
+        "paymentMethod": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "estimatedDeliveryTime": { "type": "string" },
+        "riderName": { "type": "string" },
+        "riderPhone": { "type": "string" }
+      },
+      "required": ["id", "orderNumber", "userId", "items", "total", "status", "deliveryAddress"]
+    },
+    "MenuItem": {
+      "title": "MenuItem",
+      "description": "Menu dish or item at The Grill Spot with pricing, category, and stock",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "maxLength": 120 },
+        "category": { "type": "string", "maxLength": 50 },
+        "price": { "type": "number" },
+        "originalPrice": { "type": "number" },
+        "description": { "type": "string", "maxLength": 500 },
+        "image": { "type": "string" },
+        "rating": { "type": "number" },
+        "reviewCount": { "type": "number" },
+        "isSpicy": { "type": "boolean" },
+        "isBestseller": { "type": "boolean" },
+        "isChefSpecial": { "type": "boolean" },
+        "prepTime": { "type": "string" },
+        "inStock": { "type": "boolean" },
+        "stockCount": { "type": "number" }
+      },
+      "required": ["id", "name", "category", "price", "description"]
+    },
+    "Staff": {
+      "title": "Staff",
+      "description": "Staff member working at The Grill Spot (kitchen, pitmaster, manager)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "maxLength": 100 },
+        "role": { "type": "string", "maxLength": 50 },
+        "phone": { "type": "string", "maxLength": 30 },
+        "shift": { "type": "string" },
+        "active": { "type": "boolean" }
+      },
+      "required": ["id", "name", "role"]
+    },
+    "Rider": {
+      "title": "Rider",
+      "description": "Delivery courier / rider assigned to delivery orders",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "maxLength": 100 },
+        "phone": { "type": "string", "maxLength": 30 },
+        "vehicle": { "type": "string", "maxLength": 50 },
+        "status": { "type": "string", "enum": ["available", "on_delivery", "offline"] },
+        "rating": { "type": "number" },
+        "deliveriesCount": { "type": "number" }
+      },
+      "required": ["id", "name", "phone"]
+    },
+    "AdminConfig": {
+      "title": "AdminConfig",
+      "description": "Store configuration, delivery times, announcements, and opening hours",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "storeName": { "type": "string" },
+        "announcement": { "type": "string" },
+        "isOpen": { "type": "boolean" },
+        "deliveryFee": { "type": "number" },
+        "estimatedPrepMin": { "type": "number" }
+      },
+      "required": ["id", "storeName"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Customer and Admin profiles"
+    },
+    "/orders/{orderId}": {
+      "schema": "Order",
+      "description": "All customer food orders"
+    },
+    "/menu/{itemId}": {
+      "schema": "MenuItem",
+      "description": "The Grill Spot live menu catalog"
+    },
+    "/staff/{staffId}": {
+      "schema": "Staff",
+      "description": "Restaurant staff members"
+    },
+    "/riders/{riderId}": {
+      "schema": "Rider",
+      "description": "Delivery fleet couriers"
+    },
+    "/config/{configId}": {
+      "schema": "AdminConfig",
+      "description": "Global store settings"
+    }
+  }
+}

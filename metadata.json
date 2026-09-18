@@ -1,0 +1,7 @@
+{
+  "name": "The Grill Spot",
+  "description": "Online food ordering and delivery web application for The Grill Spot restaurant with menu search, cart, secure customer login, order tracking, and dark/light theme toggle.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
