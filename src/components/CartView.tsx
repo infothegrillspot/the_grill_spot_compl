@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { ShoppingBag, Plus, Minus, Trash2, ArrowRight, ShieldCheck, Tag, Check, MapPin, Phone, CreditCard, DollarSign, Wallet, Utensils } from 'lucide-react';
+import { ShoppingBag, Plus, Minus, Trash2, ArrowRight, ShieldCheck, Tag, Check, MapPin, Phone, CreditCard, DollarSign, Wallet, Utensils, Loader2 } from 'lucide-react';
 
 export const CartView: React.FC = () => {
   const {
@@ -16,7 +16,8 @@ export const CartView: React.FC = () => {
     user,
     setAuthModalOpen,
     placeOrder,
-    setActiveTab
+    setActiveTab,
+    showToast
   } = useApp();
 
   const [orderType, setOrderType] = useState<'delivery' | 'pickup'>('delivery');
@@ -25,6 +26,7 @@ export const CartView: React.FC = () => {
   const [selectedTip, setSelectedTip] = useState<number>(3.00);
   const [paymentMethod, setPaymentMethod] = useState<'Cash on Delivery' | 'Credit / Debit Card' | 'Digital Wallet'>('Credit / Debit Card');
   const [specialNote, setSpecialNote] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Editable delivery address & phone if user wants custom for this order
   const [deliveryAddress, setDeliveryAddress] = useState(user?.address || '450 Flame Blvd, Apt 4B, Foodie District');
@@ -46,20 +48,39 @@ export const CartView: React.FC = () => {
     }
   };
 
-  const handlePlaceOrderClick = () => {
-    if (!user) {
-      setAuthModalOpen(true);
+  const handlePlaceOrderClick = async () => {
+    if (isSubmitting) return;
+
+    if (cart.length === 0) {
+      showToast('Your cart is empty');
       return;
     }
 
-    placeOrder({
-      orderType,
-      deliveryAddress,
-      customerPhone,
-      paymentMethod,
-      specialInstructions: specialNote.trim() || undefined,
-      tip: selectedTip,
-    });
+    if (orderType === 'delivery' && !deliveryAddress.trim()) {
+      showToast('Please enter your delivery street address');
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      const res = await placeOrder({
+        orderType,
+        deliveryAddress: deliveryAddress.trim() || '450 Flame Blvd, Apt 4B, Foodie District',
+        customerPhone: customerPhone.trim() || '+1 (555) 438-9201',
+        paymentMethod,
+        specialInstructions: specialNote.trim() || undefined,
+        tip: selectedTip,
+      });
+
+      if (!res.success && res.error) {
+        showToast(res.error);
+      }
+    } catch (err: any) {
+      console.error('Failed to complete order checkout:', err);
+      showToast('Could not complete order. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (cart.length === 0) {
@@ -473,29 +494,51 @@ export const CartView: React.FC = () => {
               </div>
             </div>
 
-            {/* Crucial Auth Notice as required by user */}
+            {/* Customer Notice */}
             {!user && (
-              <div className="p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/80 text-xs text-amber-900 dark:text-amber-300 flex items-start gap-2">
-                <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-bold">Customer Login Required</p>
-                  <p className="text-[11px] text-amber-800 dark:text-amber-400">
-                    To place this order and enable live delivery tracking, please sign in or register before completing checkout.
-                  </p>
+              <div className="p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/80 text-xs text-amber-900 dark:text-amber-300 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0" />
+                  <div>
+                    <p className="font-bold text-[11px]">Instant Guest Checkout</p>
+                    <p className="text-[10px] text-amber-800 dark:text-amber-400">
+                      No password required. Deliveries are tracked live.
+                    </p>
+                  </div>
                 </div>
+                <span
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setAuthModalOpen(true)}
+                  onKeyDown={e => e.key === 'Enter' && setAuthModalOpen(true)}
+                  className="px-2.5 py-1 rounded-lg bg-white dark:bg-neutral-800 text-orange-600 dark:text-orange-400 text-[11px] font-bold border border-amber-300 dark:border-amber-700 shadow-2xs cursor-pointer hover:bg-orange-50 dark:hover:bg-neutral-700"
+                >
+                  Sign In
+                </span>
               </div>
             )}
 
             <button
+              id="place-order-button"
               type="button"
+              disabled={isSubmitting}
               onClick={handlePlaceOrderClick}
-              className="w-full py-3.5 px-4 rounded-2xl bg-linear-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white font-extrabold text-sm shadow-lg shadow-orange-500/25 flex items-center justify-between cursor-pointer transition-all hover:scale-[1.01]"
+              className="w-full py-3.5 px-4 rounded-2xl bg-linear-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white font-extrabold text-sm shadow-lg shadow-orange-500/25 flex items-center justify-between cursor-pointer transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-75 disabled:cursor-not-allowed"
             >
-              <span>{user ? 'Place Grill Order Now' : 'Sign In to Place Order'}</span>
-              <span className="flex items-center gap-1.5">
-                <span>${orderTotal.toFixed(2)}</span>
-                <ArrowRight className="w-4 h-4" />
-              </span>
+              {isSubmitting ? (
+                <div className="w-full flex items-center justify-center gap-2 py-0.5">
+                  <Loader2 className="w-4 h-4 animate-spin text-white" />
+                  <span>Placing Grill Order...</span>
+                </div>
+              ) : (
+                <>
+                  <span>{user ? 'Place Grill Order Now' : 'Place Order as Guest'}</span>
+                  <span className="flex items-center gap-1.5">
+                    <span>${orderTotal.toFixed(2)}</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </span>
+                </>
+              )}
             </button>
           </div>
         </div>

@@ -192,11 +192,13 @@ export async function d1LogActivity(
         eventType,
         actorEmail: actorEmail || 'guest',
         actorName: actorName || 'Guest User',
-        details
+        details: details || {}
       })
+    }).catch(() => {
+      // Non-blocking background log
     });
-  } catch (err) {
-    console.error('Error recording activity to Cloudflare D1:', err);
+  } catch {
+    // Non-blocking background log
   }
 }
 

@@ -31,8 +31,8 @@ export const OrdersView: React.FC = () => {
     showToast
   } = useApp();
 
-  // If user is not logged in
-  if (!user) {
+  // If user is not logged in and has no active orders in progress
+  if (!user && !activeOrder) {
     return (
       <div className="max-w-md mx-auto my-8 p-6 text-center bg-white dark:bg-neutral-900 rounded-3xl border border-neutral-200 dark:border-neutral-800 shadow-sm space-y-4">
         <div className="w-16 h-16 rounded-3xl bg-orange-100 dark:bg-orange-950 text-orange-600 dark:text-orange-400 flex items-center justify-center mx-auto shadow-inner">
@@ -84,7 +84,7 @@ export const OrdersView: React.FC = () => {
           Customer Orders &amp; Live Tracking
         </h1>
         <p className="text-xs sm:text-sm text-neutral-500 dark:text-neutral-400 mt-1">
-          Real-time GPS tracker &amp; order history for {user.name} ({user.email})
+          Real-time GPS tracker &amp; order history for {user ? `${user.name} (${user.email})` : 'Your Grill Order'}
         </p>
       </div>
 
